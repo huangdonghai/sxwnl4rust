@@ -394,12 +394,16 @@ pub fn gxc_moon_lat(t: f64) -> f64 {
 /// * 格林尼治平恒星时(不含赤经章动及非多项式部分)
 ///   即格林尼治子午圈的平春风点起算的赤经
 pub fn p_gst(t: f64, dt: f64) -> f64 {
+    // The first term is in days since J2000; the polynomial below is in
+    // Julian centuries. Using the shadowed `t` in both put sidereal time off
+    // by a factor of 36525.
+    let days = t;
     let t = (t + dt) / 36525.0;
     let t2 = t * t;
     let t3 = t2 * t;
     let t4 = t3 * t;
 
-    PI2 * (0.7790572732640 + 1.00273781191135448 * t)
+    PI2 * (0.7790572732640 + 1.00273781191135448 * days)
         + (0.014506 + 4612.15739966 * t + 1.39667721 * t2 - 0.00009344 * t3 + 0.00001882 * t4) / RAD
 }
 
