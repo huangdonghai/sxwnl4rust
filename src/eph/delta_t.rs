@@ -33,8 +33,9 @@ pub fn dt_ext(y: f64, jsd: f64) -> f64 {
 
 /// 计算TD-UT的时间差
 pub fn dt_calc(y: f64) -> f64 {
-    // 获取表中最后两年的数据
-    let y0 = DT_AT[DT_AT.len() - 2].0 as f64;
+    // The reference table's last row is only (year, value); it anchors the
+    // extrapolation and is never used as an interpolation segment.
+    let y0 = DT_AT[DT_AT.len() - 1].0 as f64;
     let t0 = DT_AT[DT_AT.len() - 1].1;
 
     // 超过表中的计算范围则外推
@@ -54,9 +55,12 @@ pub fn dt_calc(y: f64) -> f64 {
         i += 1;
     }
 
-    // 计算时间差值：以 (y - DT_AT[i].0) 为自变量做三次插值（与寿星原版一致）
-    let dy = y - DT_AT[i].0 as f64;
-    DT_AT[i].1 + DT_AT[i].2 * dy + DT_AT[i].3 * dy * dy / 10.0 + DT_AT[i].4 * dy * dy * dy / 100.0
+    // 多项式自变量是「段内位置折算到 0..10」，不是年数本身。
+    let span = (DT_AT[i + 1].0 - DT_AT[i].0) as f64;
+    let t1 = (y - DT_AT[i].0 as f64) / span * 10.0;
+    let t2 = t1 * t1;
+    let t3 = t2 * t1;
+    DT_AT[i].1 + DT_AT[i].2 * t1 + DT_AT[i].3 * t2 + DT_AT[i].4 * t3
 }
 
 /// 计算力学时和世界时的差值

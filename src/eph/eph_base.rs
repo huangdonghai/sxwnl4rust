@@ -226,8 +226,15 @@ pub fn rad2rrad(mut v: f64) -> f64 {
 
 /// 临界余数(a与最近的整倍数b相差的距离)
 pub fn mod2(a: f64, b: f64) -> f64 {
-    let c = (a + b) % b;
-    if c > b / 2.0 { c - b } else { c }
+    // Signed distance to the nearest multiple of b, matching the reference's
+    // `c -= floor(c)` form. The `%` operator alone leaves negative inputs
+    // unwrapped, which shifts every calculation before the common era.
+    let mut c = a / b;
+    c -= c.floor();
+    if c > 0.5 {
+        c -= 1.0;
+    }
+    c * b
 }
 
 /// 球面转直角坐标

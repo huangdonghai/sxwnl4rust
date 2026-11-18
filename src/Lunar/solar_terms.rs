@@ -210,12 +210,11 @@ impl SolarTerms {
         }
         // 平气或平朔
         else if jd >= f1 && jd < f2 {
+            // The reference walks a flat table; with (year, period) pairs the
+            // "next row" is the next pair, not the pair after it.
             let mut i = 0;
-            while i + 2 < kb.len() {
-                if jd + pc < kb[i + 2].0 {
-                    break;
-                }
-                i += 2;
+            while i + 1 < kb.len() && jd + pc >= kb[i + 1].0 {
+                i += 1;
             }
             let mut d = kb[i].0 + kb[i].1 * ((jd + pc - kb[i].0) / kb[i].1).floor();
             d = (d + 0.5).floor();
@@ -346,15 +345,18 @@ impl SolarTerms {
 
     /// 修正古代历法月名(-721年至-104年)
     fn fix_ancient_months(&mut self, year: i32) {
-        let mut ns = Vec::new();
+        // The reference keeps three slots and lets each later era overwrite the
+        // earlier one for the same year, so a year that several calendars cover
+        // uses the most recent. Pushing every match instead would shift the
+        // slot indices the month lookup depends on.
+        let mut ns: [Option<CalendarParam>; 3] = [None, None, None];
 
-        // 计算三年的历元
-        for i in 0..3 {
-            let y = year + i - 1;
+        for i in 0..3usize {
+            let y = year + i as i32 - 1;
 
             if y >= -721 {
                 // 春秋历,ly为-722.12.17
-                ns.push(CalendarParam {
+                ns[i] = Some(CalendarParam {
                     jd: self.calc(
                         1457698.0 - 2451545.0
                             + ((0.342 + (y + 721) as f64 * 12.368422).floor() * 29.5306),
@@ -367,7 +369,7 @@ impl SolarTerms {
 
             if y >= -479 {
                 // 战国历,ly为-480.12.11
-                ns.push(CalendarParam {
+                ns[i] = Some(CalendarParam {
                     jd: self.calc(
                         1546083.0 - 2451545.0
                             + ((0.500 + (y + 479) as f64 * 12.368422).floor() * 29.5306),
@@ -380,7 +382,7 @@ impl SolarTerms {
 
             if y >= -220 {
                 // 秦汉历,ly为-221.10.31
-                ns.push(CalendarParam {
+                ns[i] = Some(CalendarParam {
                     jd: self.calc(
                         1640641.0 - 2451545.0
                             + ((0.866 + (y + 220) as f64 * 12.369000).floor() * 29.5306),
@@ -396,20 +398,21 @@ impl SolarTerms {
         for i in 0..14 {
             // 找到对应的历法参数
             let mut idx = 2;
-            while self.new_moons[i] < ns[idx].jd {
+            while idx > 0 && ns[idx].as_ref().map_or(true, |param| self.new_moons[i] < param.jd) {
                 idx -= 1;
             }
+            let Some(param) = ns[idx].as_ref() else { continue };
 
             // 计算月积数
-            let acc = ((self.new_moons[i] - ns[idx].jd + 15.0) / 29.5306).floor();
+            let acc = ((self.new_moons[i] - param.jd + 15.0) / 29.5306).floor();
 
             if acc < 12.0 {
                 // 正常月
-                let month_num = ((acc as i32 + ns[idx].month_index) % 12) as usize;
+                let month_num = ((acc as i32 + param.month_index) % 12) as usize;
                 self.month_names[i] = YUE_MING[month_num].to_string();
             } else {
                 // 闰月
-                self.month_names[i] = ns[idx].month_name.clone();
+                self.month_names[i] = param.month_name.clone();
             }
         }
     }

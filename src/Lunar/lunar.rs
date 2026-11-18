@@ -317,8 +317,8 @@ impl LunarCalendar {
 
     // 精确朔望计算
     pub fn so_accurate(&self, w: f64) -> f64 {
-        // 调用天文算法计算月相时刻
-        let t = XL::m_lon_t(w) * 36525.0;
+        // 调用天文算法计算月相时刻。月相是日月黄经差,不是月亮黄经。
+        let t = XL::ms_alon_t(w) * 36525.0;
         // 转换为UT1时间
         t - dt_t(t) + 8.0 / 24.0 // 转为北京时间(+8h)
     }
@@ -813,32 +813,25 @@ impl LunarCalendar {
             w += PI2 / 24.0;
         }
 
-        // // 月相同理,使用精确时刻比较
-        // let moon_phase = ((local_jd - ssq.new_moons[0]) / 29.5306).floor();
-        // let phase_time = ssq.new_moons[moon_phase as usize];
-        // if (local_jd - phase_time).abs() < 1.0 {
-        //     day.moon_phase = MOON_PHASE_NAMES[(moon_phase % 4.0) as usize].to_string();
-        //     day.moon_phase_time = phase_time;
-        //     day.moon_phase_str = jd.time_str(day.moon_phase_time);
-        // }
-
-        // 月相查找 - 使用与 yue_li_calc 相同的算法
-        let jd2 = local_jd + dt_t(local_jd); // 转换为力学时
-        let t = jd2 / 36525.0; // 转换为儒略世纪数
-        let w = XL::ms_alon(t, 10, 3); // 计算月日视黄经差
-        let xn = ((w / PI2 * 4.0 + 4000000.01).floor() as i32 % 4) as usize; // 计算月相序号
-
-        // 设置月相信息
-        day.moon_phase = MOON_PHASE_NAMES[xn].to_string();
-
-        // 计算精确的月相时刻 (可选)
-        // 这里可以使用 so_accurate 方法计算精确的月相时刻
-        // 类似于 yue_li_calc 中的实现
-        let w_phase = ((w - 0.78) / PI * 2.0).floor() * PI / 2.0;
-        let phase_time = self.so_accurate(w_phase);
-        if (local_jd - phase_time).abs() < 1.0 {
-            day.moon_phase_time = phase_time;
-            day.moon_phase_str = jd.time_str(day.moon_phase_time);
+        // 月相: the day that contains a phase carries its name.
+        let jd2 = d0 + dt_t(d0) - 8.0 / 24.0;
+        let mut w =
+            ((XL::ms_alon(jd2 / 36525.0, 10, 3) - 0.78) / PI2 * 4.0).floor() * PI2 / 4.0;
+        for _ in 0..6 {
+            let at = self.so_accurate(w);
+            let on_day = (at + 0.5).floor();
+            if on_day > d0 {
+                break;
+            }
+            if on_day == d0 {
+                let index =
+                    ((w / PI2 * 4.0 + 4000000.01).floor() as i64).rem_euclid(4) as usize;
+                day.moon_phase = MOON_PHASE_NAMES[index].to_string();
+                day.moon_phase_time = at;
+                day.moon_phase_str = jd.time_str(at);
+                break;
+            }
+            w += PI2 / 4.0;
         }
 
         day
