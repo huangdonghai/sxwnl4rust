@@ -37,6 +37,8 @@ fn solar_eclipse_types_match_the_almanac() {
         (2020, 6, 21, "A"), // annular, visible in China
         (2025, 3, 29, "P"), // partial
         (2026, 1, 18, "N"), // no eclipse at this new moon
+        (-310, 8, 15, "H"), // hybrid, from the reference calendar
+        (-200, 3, 10, "N"),
     ];
     for (y, m, d, want) in cases {
         let result = ec_fast(near(y, m, d));
