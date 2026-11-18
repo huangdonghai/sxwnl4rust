@@ -695,10 +695,14 @@ impl LunarCalendar {
         let mut ssq = SolarTerms::new();
         ssq.calc_year(d0);
 
-        // 4. 计算农历月
-        let mut mk = ((d0 - ssq.new_moons[0]) / 30.0) as usize;
-        if mk < 13 && ssq.new_moons[mk + 1] <= d0 {
-            mk += 1;
+        // 4. 计算农历月: the latest new moon at or before this day. Picking it
+        // by search keeps the index inside the table at year boundaries,
+        // where the day count can run past the last fitted 30-day slot.
+        let mut mk = 13usize;
+        for i in 0..=13 {
+            if ssq.new_moons[i] <= d0 {
+                mk = i;
+            }
         }
 
         // 5. 设置农历信息
@@ -883,10 +887,12 @@ impl LunarCalendar {
         let mut ssq = SolarTerms::new();
         ssq.calc_year(d0);
 
-        // 5. 找农历月
-        let mut mk = ((d0 - ssq.new_moons[0]) / 30.0) as usize;
-        if mk < 13 && ssq.new_moons[mk + 1] <= d0 {
-            mk += 1;
+        // 5. 找农历月: latest new moon at or before this day.
+        let mut mk = 13usize;
+        for i in 0..=13 {
+            if ssq.new_moons[i] <= d0 {
+                mk = i;
+            }
         }
 
         // 6. 设置月历信息

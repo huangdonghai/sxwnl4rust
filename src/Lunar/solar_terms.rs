@@ -35,7 +35,9 @@ pub struct SolarTerms {
 
 impl SolarTerms {
     /// 朔直线拟合参数
-    pub const SUO_KB: [(f64, f64); 13] = [
+    /// The reference table ends at 619 AD; past it the low-precision new moon
+    /// plus the correction table is used, not this mean fit.
+    pub const SUO_KB: [(f64, f64); 12] = [
         // JD, 合朔周期(天)                       // 说明
         (1457698.231017, 29.53067166), // -721-12-17 h=0.00032 古历·春秋
         (1546082.512234, 29.53085106), // -479-12-11 h=0.00053 古历·战国
@@ -48,8 +50,7 @@ impl SolarTerms {
         (1907360.704700, 29.53060000), //  510-01-26 h=0.00030 宋书·律历志(祖冲之大明历)
         (1936596.224900, 29.53060000), //  590-02-10 h=0.01010 随书·律历志(开皇历)
         (1939135.675300, 29.53060000), //  597-01-24 h=0.00890 随书·律历志(大业历)
-        (1947168.000000, 29.53060000), //  619-01-21
-        (2436935.000000, 29.53060000), // 边界值
+        (1947168.000000, 29.53060000), //  619-01-21 边界值
     ];
 
     /// 气直线拟合参数
@@ -210,14 +211,14 @@ impl SolarTerms {
         // 平气或平朔
         else if jd >= f1 && jd < f2 {
             let mut i = 0;
-            while i < kb.len() - 1 {
+            while i + 2 < kb.len() {
                 if jd + pc < kb[i + 2].0 {
                     break;
                 }
                 i += 2;
             }
             let mut d = kb[i].0 + kb[i].1 * ((jd + pc - kb[i].0) / kb[i].1).floor();
-            d = d.floor() + 0.5;
+            d = (d + 0.5).floor();
 
             // 修正-103年1月24日的朔日
             if d == 1683460.0 {
@@ -246,15 +247,18 @@ impl SolarTerms {
                 ((jd - f2) / 29.5306) as usize
             };
 
-            let n = if is_solar_term {
-                &self.qb[idx..=idx]
+            // The correction tables only cover the years they were fitted
+            // for; outside them the reference implementation reads past the
+            // end and falls back to the uncorrected value.
+            let correction = if is_solar_term {
+                self.qb.get(idx..=idx)
             } else {
-                &self.sb[idx..=idx]
+                self.sb.get(idx..=idx)
             };
 
-            match n {
-                "1" => d + 1.0,
-                "2" => d - 1.0,
+            match correction {
+                Some("1") => d + 1.0,
+                Some("2") => d - 1.0,
                 _ => d,
             }
         } else {
