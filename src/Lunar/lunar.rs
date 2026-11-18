@@ -469,7 +469,7 @@ impl LunarCalendar {
             if day.day.d0 == ssq.new_moons[mk] as i32 || i == 0 {
                 day.lunar_month_name = ssq.month_names[mk].clone();
                 day.lunar_month_days = ssq.month_days[mk];
-                day.is_leap_month = ssq.leap == mk as i32;
+                day.is_leap_month = ssq.leap != 0 && ssq.leap == mk as i32;
                 day.next_month_name = if mk < 13 {
                     ssq.month_names[mk + 1].clone()
                 } else {
@@ -671,7 +671,7 @@ impl LunarCalendar {
         let local_jd = bj_time + local_time_offset / 24.0;
 
         // 3. 获取儒略日整数部分作为日期
-        let d0 = (local_jd.floor() - J2000).floor();
+        let d0 = (local_jd + 0.5).floor() - J2000;
 
         // 4. 构造基础公历信息
         let mut day = LunarDay::default();
@@ -706,7 +706,7 @@ impl LunarCalendar {
         day.lunar_day_name = RI_MC[day.ldi as usize].to_string();
         day.lunar_month_name = ssq.month_names[mk].clone();
         day.lunar_month_days = ssq.month_days[mk];
-        day.is_leap_month = ssq.leap == (mk as i32);
+        day.is_leap_month = ssq.leap != 0 && ssq.leap == (mk as i32);
         day.next_month_name = if mk < 13 {
             ssq.month_names[mk + 1].clone()
         } else {
@@ -785,16 +785,28 @@ impl LunarCalendar {
         // 14. 计算节日
         day.festival = festival_info.calc_festivals(&day);
 
-        // 在计算节气和月相时使用精确时刻
-        let mk = ((d0 - ssq.solar_terms[0] - 7.0) / 15.2184) as i32;
-        if mk < 23 && local_jd >= ssq.solar_terms[mk as usize + 1] {
-            let diff = local_jd - ssq.solar_terms[mk as usize + 1];
-            // 如果时间差小于1天,则认为是节气
-            if diff.abs() < 1.0 {
-                day.jie_qi = JIE_QI_NAMES[mk as usize].to_string();
-                day.jie_qi_time = ssq.solar_terms[mk as usize + 1];
-                day.jie_qi_str = jd.time_str(day.jie_qi_time);
+        // The solar term of this day is the one whose accurate instant lands
+        // on it. `qi_accurate` returns Beijing time on the same J2000-relative
+        // day scale as `d0`, so the day index is just (at + 0.5).floor().
+        let anchor = d0 + dt_t(d0) - 8.0 / 24.0;
+        let mut w = ((XL::s_alon(anchor / 36525.0, 3) - 0.13) / PI2 * 24.0).floor()
+            * PI2
+            / 24.0;
+        for _ in 0..24 {
+            let at = self.qi_accurate(w);
+            let on_day = (at + 0.5).floor();
+            if on_day > d0 {
+                break;
             }
+            if on_day == d0 {
+                let index =
+                    ((w / PI2 * 24.0 + 24000006.01).floor() as i64).rem_euclid(24) as usize;
+                day.jie_qi = JIE_QI_NAMES[index].to_string();
+                day.jie_qi_time = at;
+                day.jie_qi_str = jd.time_str(at);
+                break;
+            }
+            w += PI2 / 24.0;
         }
 
         // // 月相同理,使用精确时刻比较
@@ -847,7 +859,7 @@ impl LunarCalendar {
         let jde = jd.to_jd() + dt_t(jd.to_jd()) / 24.0;
         let bj_time = jde - time_zone / 24.0;
         let local_jd = bj_time + local_time_offset / 24.0;
-        let d0 = local_jd.floor() - J2000;
+        let d0 = (local_jd + 0.5).floor() - J2000;
 
         // 3. 构造基础信息
         let mut day = LunarSimpleDay::default();
@@ -883,7 +895,7 @@ impl LunarCalendar {
         day.lmi = if mk >= 2 { mk - 2} else { mk + 10} as i32;
         day.lunar_month_name = ssq.month_names[mk].clone();
         day.lunar_month_days = ssq.month_days[mk];
-        day.is_leap_month = ssq.leap == (mk as i32);
+        day.is_leap_month = ssq.leap != 0 && ssq.leap == (mk as i32);
         day.next_month_name = if mk < 13 {
             ssq.month_names[mk + 1].clone()
         } else {
