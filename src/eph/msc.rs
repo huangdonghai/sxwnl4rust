@@ -973,6 +973,9 @@ impl RsGS {
 
         // 插值要素准备
         let n = self.zs.len() / 9; // 插值点数
+        if n == 0 {
+            return vec![0.0; m];
+        }
         let w = self.zs.len() / n; // 每节点个数
 
         // 相对于第一点的时间距离
@@ -1875,6 +1878,8 @@ pub struct RsPL {
     vb: String,   // 本影南北距离
 
     eclipse_data: EclipseData,
+    /// 贝塞尔插值表,由 `sec_max` 建立,`sec_xy` 使用
+    rs_gs: RsGS,
 }
 
 /// 日月坐标计算结果
@@ -1922,6 +1927,19 @@ struct EclipseData {
     sun_j: f64,   // 日没时刻
 }
 
+/// Result of a local solar eclipse calculation.
+#[derive(Debug, Default, Clone)]
+pub struct SolarEclipseReport {
+    /// 全食, 环食, 偏食 or empty when the site sees none.
+    pub kind: String,
+    /// Eclipse magnitude at the site.
+    pub magnitude: f64,
+    /// Duration of the total or annular phase, in days.
+    pub duration: f64,
+    /// 食甚, 初亏, 复圆, 食既, 生光 as J2000-relative TD days.
+    pub times: [f64; 5],
+}
+
 /// 食界点坐标结构体
 #[derive(Debug, Default, Clone)]
 pub struct BoundaryPoint {
@@ -1947,7 +1965,8 @@ impl RsPL {
     pub fn new() -> Self {
         Self {
             nasa_r: 0,
-            s_t: Vec::new(),
+            // 食甚, 初亏, 复圆, 食既, 生光
+            s_t: vec![0.0; 5],
             a: [0.0, 0.0, 0.0],      // 本影锥顶点坐标
             b: [0.0, 0.0, 0.0],      // 半影锥顶点坐标
             p: TimeCoord::default(), // t1时刻参数
@@ -1956,6 +1975,19 @@ impl RsPL {
             vc: String::new(),       // 食中心类型
             vb: String::new(),       // 本影南北距离
             eclipse_data: EclipseData::default(),
+            rs_gs: RsGS::new(),
+        }
+    }
+
+    /// What the last `sec_max` call found, for callers outside the crate.
+    pub fn report(&self) -> SolarEclipseReport {
+        SolarEclipseReport {
+            kind: self.eclipse_data.lx.clone(),
+            magnitude: self.eclipse_data.sf,
+            duration: self.eclipse_data.dur,
+            times: [
+                self.s_t[0], self.s_t[1], self.s_t[2], self.s_t[3], self.s_t[4],
+            ],
         }
     }
 
@@ -1974,7 +2006,7 @@ impl RsPL {
         // 真恒星时(不考虑非多项式部分)
         let gst = p_gst(jd - deltat, deltat) + zd[0] * (Prece::hcjj(jd / 36525.0) + zd[1]).cos();
 
-        let rs_gs = RsGS::new();
+        let rs_gs = &self.rs_gs;
         // =======月亮========
         let mut z = rs_gs.moon(jd);
         re.m_cj = z[0];
@@ -2049,9 +2081,8 @@ impl RsPL {
         };
 
         // 初始化插值表
-        let mut rsgs = RsGS::new();
-        rsgs.init(jd, 7);
-        jd = rsgs.zjd; // 食甚初始估值为插值表中心时刻(粗朔)
+        self.rs_gs.init(jd, 7);
+        jd = self.rs_gs.zjd; // 食甚初始估值为插值表中心时刻(粗朔)
 
         // 计算食甚时刻
         let mut g = SecXYResult::default();
